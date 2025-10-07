@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
 from .core.database import Base, engine
-from .routers import health, auth
+from .routers import auth, dashboard, health, kyc, leases, maintenance, properties, tenants, units
 
 app = FastAPI()
 
@@ -19,6 +19,13 @@ Base.metadata.create_all(bind=engine)
 
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(tenants.router)
+app.include_router(properties.router)
+app.include_router(units.router)
+app.include_router(leases.router)
+app.include_router(maintenance.router)
+app.include_router(dashboard.router)
+app.include_router(kyc.router)
 
 @app.get("/")
 def root():

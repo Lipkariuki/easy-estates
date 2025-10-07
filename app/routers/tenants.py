@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from ..core.config import settings
 from ..core.database import get_db
-from ..dependencies import get_current_user, require_roles
+from ..dependencies import get_current_user, get_current_user_optional, require_roles
 from ..models import Tenant, TenantDocument
 from ..schemas import (
     TenantCreate,
@@ -25,6 +26,9 @@ def _tenant_to_schema(tenant: Tenant, pending_documents: int = 0) -> TenantOut:
         email=tenant.email,
         phone=tenant.phone,
         id_number=tenant.id_number,
+        date_of_birth=tenant.date_of_birth,
+        gender=tenant.gender,
+        occupation=tenant.occupation,
         kyc_status=tenant.kyc_status,
         kyc_score=tenant.kyc_score,
         kyc_override=tenant.kyc_override,
@@ -37,8 +41,11 @@ def _tenant_to_schema(tenant: Tenant, pending_documents: int = 0) -> TenantOut:
 def list_tenants(
     query: TenantQuery = Depends(),
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    user=Depends(get_current_user_optional),
 ):
+    if not settings.allow_open_tenant_creation and user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
     stmt = db.query(Tenant)
 
     if query.status:
@@ -85,8 +92,13 @@ def list_tenants(
 def create_tenant(
     payload: TenantCreate,
     db: Session = Depends(get_db),
-    user=Depends(require_roles("owner", "manager")),
+    user=Depends(get_current_user_optional),
 ):
+    if not settings.allow_open_tenant_creation:
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        require_roles("owner", "manager")(user)
+
     tenant = Tenant(**payload.dict())
     # Default new tenants to pending status
     if not tenant.kyc_status:
@@ -98,7 +110,10 @@ def create_tenant(
 
 
 @router.get("/{tenant_id}", response_model=TenantOut)
-def get_tenant(tenant_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def get_tenant(tenant_id: int, db: Session = Depends(get_db), user=Depends(get_current_user_optional)):
+    if not settings.allow_open_tenant_creation and user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")

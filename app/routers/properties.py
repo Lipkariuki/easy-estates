@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from ..dependencies import get_current_user, require_roles
+from ..core.config import settings
+from ..dependencies import get_current_user, get_current_user_optional, require_roles
 from ..core.database import get_db
 from ..models import Lease, Property, Tenant, Unit
 from ..schemas import (
@@ -68,8 +69,11 @@ def _aggregate_property_metrics(db: Session, property_ids: List[int]) -> tuple[d
 def list_properties(
     query: PropertyQuery = Depends(),
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    user=Depends(get_current_user_optional),
 ):
+    if not settings.allow_open_property_management and user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
     stmt = db.query(Property)
 
     if query.search:
@@ -82,10 +86,11 @@ def list_properties(
     if query.owner_id:
         stmt = stmt.filter(Property.owner_id == query.owner_id)
 
-    if user.role == "owner":
-        stmt = stmt.filter(Property.owner_id == user.id)
-    elif user.role == "manager":
-        stmt = stmt.filter((Property.manager_id == user.id) | (Property.owner_id == user.id))
+    if user is not None:
+        if user.role == "owner":
+            stmt = stmt.filter(Property.owner_id == user.id)
+        elif user.role == "manager":
+            stmt = stmt.filter((Property.manager_id == user.id) | (Property.owner_id == user.id))
 
     total = stmt.count()
 
@@ -128,13 +133,20 @@ def list_properties(
 def create_property(
     payload: PropertyCreate,
     db: Session = Depends(get_db),
-    user=Depends(require_roles("owner", "manager")),
+    user=Depends(get_current_user_optional),
 ):
+    if not settings.allow_open_property_management:
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        if user.role not in {"owner", "manager"}:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
+
     data = payload.dict()
-    if user.role == "owner" and not data.get("owner_id"):
-        data["owner_id"] = user.id
-    if user.role == "manager" and not data.get("manager_id"):
-        data["manager_id"] = user.id
+    if user is not None:
+        if user.role == "owner" and not data.get("owner_id"):
+            data["owner_id"] = user.id
+        if user.role == "manager" and not data.get("manager_id"):
+            data["manager_id"] = user.id
 
     prop = Property(**data)
     db.add(prop)
@@ -165,12 +177,19 @@ def create_property(
 
 
 @router.get("/{property_id}", response_model=PropertyDetail)
-def get_property(property_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def get_property(
+    property_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user_optional),
+):
+    if not settings.allow_open_property_management and user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
     prop = db.query(Property).filter(Property.id == property_id).first()
     if not prop:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
 
-    if user.role != "admin" and user.role != "viewer":
+    if user is not None and user.role not in {"admin", "viewer"}:
         if user.role == "owner" and prop.owner_id != user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
         if user.role == "manager" and prop.manager_id not in {None, user.id} and prop.owner_id != user.id:

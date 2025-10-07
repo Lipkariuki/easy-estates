@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -11,6 +11,12 @@ class TenantCreate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     id_number: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    gender: Optional[str] = Field(
+        default=None,
+        pattern=r"^(male|female|other|unspecified)$",
+    )
+    occupation: Optional[str] = None
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
     notes: Optional[str] = None
@@ -21,6 +27,12 @@ class TenantUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     id_number: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    gender: Optional[str] = Field(
+        default=None,
+        pattern=r"^(male|female|other|unspecified)$",
+    )
+    occupation: Optional[str] = None
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
     notes: Optional[str] = None
@@ -35,6 +47,9 @@ class TenantOut(BaseModel):
     email: Optional[str]
     phone: Optional[str]
     id_number: Optional[str]
+    date_of_birth: Optional[date]
+    gender: Optional[str]
+    occupation: Optional[str]
     kyc_status: str
     kyc_score: int
     kyc_override: bool

@@ -1,26 +1,122 @@
-from pydantic import BaseModel
-from pydantic_settings import BaseSettings
-from typing import List
-import os
+from typing import Any, List, Sequence
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = os.getenv("DATABASE_URL", "")
-    jwt_secret: str = os.getenv("JWT_SECRET", "changeme")
-    jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
-    access_token_exp_minutes: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
-    cors_origins: List[str] = [
-        o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()
-    ]
-    project_name: str = os.getenv("PROJECT_NAME", "Easy Estates")
-    frontend_base_url: str = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
-    s3_access_key_id: str | None = os.getenv("S3_ACCESS_KEY_ID")
-    s3_secret_access_key: str | None = os.getenv("S3_SECRET_ACCESS_KEY")
-    s3_bucket: str | None = os.getenv("S3_BUCKET")
-    s3_region: str | None = os.getenv("S3_REGION")
-    sendgrid_api_key: str | None = os.getenv("SENDGRID_API_KEY")
-    sendgrid_from_email: str | None = os.getenv("SENDGRID_FROM_EMAIL")
-    support_email: str | None = os.getenv("SUPPORT_EMAIL")
-    emit_debug_tokens: bool = os.getenv("EMIT_DEBUG_TOKENS", "false").lower() in {"1", "true", "yes"}
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    DATABASE_URL: str
+    JWT_SECRET: str = "change-this"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    CORS_ORIGINS: List[str] | str = ["http://localhost:5173"]
+    PROJECT_NAME: str = "Easy Estates"
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+    S3_ACCESS_KEY_ID: str | None = None
+    S3_SECRET_ACCESS_KEY: str | None = None
+    S3_BUCKET: str | None = None
+    S3_REGION: str | None = None
+    SENDGRID_API_KEY: str | None = None
+    SENDGRID_FROM_EMAIL: str | None = None
+    SUPPORT_EMAIL: str | None = None
+    EMIT_DEBUG_TOKENS: bool = False
+    ALLOW_OPEN_TENANT_CREATION: bool = False
+    ALLOW_OPEN_PROPERTY_MANAGEMENT: bool = False
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors(cls, raw: Any) -> Sequence[str] | Any:
+        """Normalise origins from JSON arrays, comma lists, or single strings."""
+        if isinstance(raw, list):
+            return raw
+
+        if isinstance(raw, str):
+            value = raw.strip()
+            if not value:
+                return []
+
+            if value.startswith("[") and value.endswith("]"):
+                import json
+
+                return json.loads(value)
+
+            if "," in value:
+                return [origin.strip() for origin in value.split(",") if origin.strip()]
+
+            return [value]
+
+        return raw
+
+    @property
+    def database_url(self) -> str:
+        return self.DATABASE_URL
+
+    @property
+    def jwt_secret(self) -> str:
+        return self.JWT_SECRET
+
+    @property
+    def jwt_algorithm(self) -> str:
+        return self.JWT_ALGORITHM
+
+    @property
+    def access_token_exp_minutes(self) -> int:
+        return self.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+
+    @property
+    def cors_origins(self) -> List[str]:
+        value = self.CORS_ORIGINS
+        return value if isinstance(value, list) else [value]
+
+    @property
+    def project_name(self) -> str:
+        return self.PROJECT_NAME
+
+    @property
+    def frontend_base_url(self) -> str:
+        return self.FRONTEND_BASE_URL
+
+    @property
+    def s3_access_key_id(self) -> str | None:
+        return self.S3_ACCESS_KEY_ID
+
+    @property
+    def s3_secret_access_key(self) -> str | None:
+        return self.S3_SECRET_ACCESS_KEY
+
+    @property
+    def s3_bucket(self) -> str | None:
+        return self.S3_BUCKET
+
+    @property
+    def s3_region(self) -> str | None:
+        return self.S3_REGION
+
+    @property
+    def sendgrid_api_key(self) -> str | None:
+        return self.SENDGRID_API_KEY
+
+    @property
+    def sendgrid_from_email(self) -> str | None:
+        return self.SENDGRID_FROM_EMAIL
+
+    @property
+    def support_email(self) -> str | None:
+        return self.SUPPORT_EMAIL
+
+    @property
+    def emit_debug_tokens(self) -> bool:
+        return self.EMIT_DEBUG_TOKENS
+
+    @property
+    def allow_open_tenant_creation(self) -> bool:
+        return self.ALLOW_OPEN_TENANT_CREATION
+
+    @property
+    def allow_open_property_management(self) -> bool:
+        return self.ALLOW_OPEN_PROPERTY_MANAGEMENT
+
 
 settings = Settings()

@@ -108,6 +108,12 @@ class Tenant(Base):
     email = Column(String(255), unique=True, index=True)
     phone = Column(String(50), unique=True, index=True)
     id_number = Column(String(50), unique=True)
+    date_of_birth = Column(Date)
+    gender = Column(
+        Enum("male", "female", "other", "unspecified", name="tenant_gender_enum"),
+        nullable=True,
+    )
+    occupation = Column(String(255))
     emergency_contact_name = Column(String(255))
     emergency_contact_phone = Column(String(50))
     notes = Column(Text)
